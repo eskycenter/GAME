@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò Chơi Luyện Gõ Phím Văn Phòng - 1 Từ Duy Nhất</title>
+    <!-- Nhúng Tailwind CSS để tạo giao diện hiện đại -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Thiết lập phông chữ ưu tiên Times New Roman theo yêu cầu */
+        body, button, input, select, div {
+            font-family: 'Times New Roman', Times, serif;
+        }
+        /* Hiệu ứng rung màn hình khi để chữ chạm đáy nguy hiểm */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        .shake {
+            animation: shake 0.2s ease-in-out;
+        }
+        /* Hiệu ứng nổ hạt khi gõ đúng từ */
+        @keyframes particle-fade {
+            0% { opacity: 1; transform: scale(1) translate(0, 0); }
+            100% { opacity: 0; transform: scale(0) translate(var(--x), var(--y)); }
+        }
+        .particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particle-fade 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Container chính của ứng dụng -->
+    <div id="game-card" class="bg-white border border-slate-300 shadow-2xl rounded-xl w-full max-w-4xl p-6 flex flex-col transition-all duration-300">
+        
+        <!-- Header / Tiêu đề hành chính chuẩn công sở -->
+        <div class="border-b-2 border-slate-200 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="text-center sm:text-left">
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">CHƯƠNG TRÌNH LUYỆN GÕ PHÍM NHANH</h1>
+                <p class="text-sm text-slate-500 italic mt-1">Chế độ gõ 1 từ ngẫu nhiên - Rèn luyện phản xạ gõ phím nhanh không dấu</p>
+            </div>
+            <!-- Bảng hiển thị chế độ hiện tại -->
+            <div class="flex gap-2 items-center">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Chế độ: 1 Từ Không Dấu
+                </span>
+            </div>
+        </div>
+
+        <!-- Bảng thống kê chỉ số thời gian thực -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-center">
+            <div class="bg-blue-50 border border-blue-100 p-3 rounded-lg shadow-sm">
+                <div class="text-xs text-blue-600 font-bold uppercase tracking-wider">Thời Gian Còn Lại</div>
+                <div id="timer-display" class="text-3xl font-extrabold text-blue-900 mt-1">60s</div>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-100 p-3 rounded-lg shadow-sm">
+                <div class="text-xs text-emerald-600 font-bold uppercase tracking-wider">Điểm Số Hiện Tại</div>
+                <div id="score-display" class="text-3xl font-extrabold text-emerald-900 mt-1">0</div>
+            </div>
+            <div class="bg-amber-50 border border-amber-100 p-3 rounded-lg shadow-sm">
+                <div class="text-xs text-amber-600 font-bold uppercase tracking-wider">Độ Chính Xác</div>
+                <div id="accuracy-display" class="text-3xl font-extrabold text-amber-900 mt-1">100%</div>
+            </div>
+            <div class="bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
+                <div class="text-xs text-rose-600 font-bold uppercase tracking-wider">Lượt Chơi (Mạng)</div>
+                <div id="lives-display" class="text-3xl font-extrabold text-rose-900 mt-1">❤❤❤❤❤</div>
+            </div>
+        </div>
+
+        <!-- Khu vực hiển thị chữ rơi -->
+        <div id="play-zone" class="relative w-full h-[450px] bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mb-6">
+            <!-- Background lưới trang trí kiểu retro công nghệ -->
+            <div class="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30"></div>
+            
+            <!-- Vạch giới hạn nguy hiểm phía dưới -->
+            <div class="absolute bottom-6 left-0 right-0 h-0.5 bg-red-500/50 border-t border-dashed border-red-500/80 pointer-events-none flex justify-center items-center">
+                <span class="bg-red-950 text-red-400 text-[10px] px-2 py-0.5 rounded border border-red-500/30 uppercase tracking-widest font-sans">Vạch Cảnh Báo</span>
+            </div>
+
+            <!-- Nút bắt đầu hiển thị đè lên màn hình khi chưa chơi -->
+            <div id="start-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 z-10 p-6 text-center transition-all duration-300">
+                <div class="max-w-md">
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-3 uppercase tracking-wider">Chơi đơn giản - Phản xạ nhanh</span>
+                    <h2 class="text-2xl font-bold text-white mb-2">Gõ Chữ 1 Từ Duy Nhất</h2>
+                    <p class="text-slate-400 text-sm mb-6">Mỗi lần chỉ có 1 từ ngắn không dấu rơi xuống. Gõ đúng từ đó để kích hoạt từ mới tiếp theo xuất hiện. Cố gắng đạt điểm tối đa trong 1 phút!</p>
+                    <button id="btn-play-now" onclick="initiateGame()" class="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg hover:shadow-blue-500/20 transform hover:-translate-y-0.5 transition duration-150 text-lg w-full sm:w-auto">
+                        Bắt Đầu Ngay
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Thanh điều khiển và nhập liệu -->
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between border-t border-slate-200 pt-4">
+            <div class="w-full sm:flex-1 relative">
+                <input type="text" id="typing-input" placeholder="Từ khóa sẽ xuất hiện ở đây..." disabled 
+                       class="w-full px-5 py-4 text-xl border-2 border-slate-300 rounded-xl text-center focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition disabled:bg-slate-50 disabled:cursor-not-allowed shadow-sm uppercase tracking-wide font-bold"
+                       autocomplete="off" spellcheck="false">
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                    <span class="text-xs bg-slate-200 text-slate-500 px-2 py-1 rounded border border-slate-300 uppercase font-sans">Enter để xóa nhanh</span>
+                </div>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button id="btn-sound-toggle" onclick="toggleSound()" class="p-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl border border-slate-300 flex items-center justify-center transition" title="Bật/Tắt âm thanh">
+                    <!-- Icon Loa phát tiếng -->
+                    <svg id="sound-icon-on" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M12 18.75V5.25L8.25 9H4.5A1.5 1.5 0 003 10.5v3a1.5 1.5 0 001.5 1.5h3.75L12 18.75z"/></svg>
+                    <svg id="sound-icon-off" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                </button>
+                <button id="btn-abort" onclick="abortGame()" disabled class="px-6 py-4 bg-rose-600 hover:bg-rose-500 disabled:bg-slate-300 text-white font-bold rounded-xl shadow transition text-base whitespace-nowrap">
+                    Hủy Lượt Chơi
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- HỘP THOẠI MODAL BÁO KẾT QUẢ (THAY THẾ CHO ALERT) -->
+    <div id="result-modal" class="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white border-2 border-slate-300 rounded-2xl w-full max-w-md p-6 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800 mb-1">Kết Quả Luyện Tập</h3>
+                <p id="modal-status-text" class="text-sm text-slate-500 mb-6">Chúc mừng bạn đã hoàn thành phiên luyện gõ phím!</p>
+                
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 grid grid-cols-2 gap-4 text-left">
+                    <div>
+                        <span class="text-xs text-slate-500 uppercase tracking-wide">Tổng số điểm</span>
+                        <div id="modal-score" class="text-2xl font-extrabold text-blue-600">0</div>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 uppercase tracking-wide">Tốc độ gõ</span>
+                        <div id="modal-wpm" class="text-2xl font-extrabold text-indigo-600">0 WPM</div>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 uppercase tracking-wide">Độ chính xác</span>
+                        <div id="modal-accuracy" class="text-2xl font-extrabold text-emerald-600">0%</div>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 uppercase tracking-wide">Gõ thành công</span>
+                        <div id="modal-correct-count" class="text-2xl font-extrabold text-amber-600">0 từ</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeModal()" class="flex-1 py-3 border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-slate-50 transition">Đóng lại</button>
+                    <button onclick="closeModal(); initiateGame();" class="flex-1 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-500 shadow-md transition">Chơi Lại</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- KHO DỮ LIỆU TỪ VỰNG NGẮN KHÔNG DẤU & VĂN PHÒNG ĐA DẠNG ---
+        const vocabPool = [
+            "doc", "save", "duy", "file", "open", "copy", "print", "run", "code", "data",
+            "text", "user", "host", "link", "mail", "chat", "task", "plan", "view", "edit",
+            "team", "work", "time", "date", "note", "list", "key", "pass", "nam", "linh",
+            "lan", "hoa", "binh", "minh", "cuong", "tuan", "dung", "hoang", "phong", "hai",
+            "anh", "viet", "phat", "tien", "tai", "loc", "phuc", "tam", "duc", "nghia",
+            "tin", "tri", "dung", "lam", "quan", "khanh", "thao", "trang", "huong", "quynh",
+            "ngoc", "vy", "my", "yen", "oanh", "diep", "chi", "bich", "van", "tu", "son",
+            "khoa", "hieu", "dat", "thinh", "long", "khanh", "nhan", "phuong", "dung", "tram",
+            "hang", "nga", "quyen", "yen", "trinh", "thu", "giang", "dong", "tay", "nam", "bac",
+            "excel", "word", "ppt", "pdf", "web", "app", "dev", "test", "bug", "log", "api"
+        ];
+
+        // --- CÁC BIẾN QUẢN LÝ TRẠNG THÁI TRÒ CHƠI ---
+        let score = 0;
+        let timeLeft = 60;
+        let lives = 5;
+        let totalKeystrokes = 0;
+        let correctKeystrokes = 0;
+        let correctWordsCount = 0;
+        let isPlaying = false;
+        let soundEnabled = true;
+
+        let activeWords = []; // Luôn chỉ có tối đa 1 phần tử trong chế độ này
+        let lastSpawnedWord = ""; // Lưu từ vừa sinh ra để tránh lặp ngay lập tức
+        let gameInterval = null; // Quản lý đồng hồ đếm ngược 1 phút
+        let spawnTimeout = null; // Quản lý độ trễ nhỏ khi chuyển từ mới
+        let animationFrameId = null; // Quản lý luồng cập nhật đồ họa rơi tự do
+
+        // --- NULL-SAFE DOM HELPERS (CÁC HÀM TRỢ GIÚP SAFELY TƯƠNG TÁC VỚI DOM) ---
+        function safeClassAdd(idOrEl, ...classes) {
+            const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+            if (el) el.classList.add(...classes);
+        }
+
+        function safeClassRemove(idOrEl, ...classes) {
+            const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+            if (el) el.classList.remove(...classes);
+        }
+
+        function safeSetText(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.innerText = text;
+        }
+
+        let audioCtx = null;
+        function getAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioCtx;
+        }
+
+        // Hàm phát âm thanh bíp cơ bản
+        function playTone(freq, type, duration) {
+            if (!soundEnabled) return;
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                
+                osc.type = type;
+                osc.frequency.value = freq;
+                
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch (e) {
+                console.log("Audio Error:", e);
+            }
+        }
+
+        // Âm thanh thành công khi gõ đúng từ
+        function playSuccessSound() {
+            playTone(523.25, "sine", 0.15); // Nốt Đô (C5)
+            setTimeout(() => playTone(659.25, "sine", 0.15), 80); // Nốt Mi (E5)
+        }
+
+        // Âm thanh khi gõ sai hoặc để chữ chạm đáy nguy hiểm
+        function playErrorSound() {
+            playTone(150, "sawtooth", 0.3); // Tiếng xịt âm trầm
+        }
+
+        // Âm thanh lách cách gõ phím phản hồi thực tế
+        function playClickSound() {
+            playTone(800, "triangle", 0.03); 
+        }
+
+        // Âm thanh kết thúc trò chơi
+        function playFanfareSound(win) {
+            if (win) {
+                playTone(523.25, "sine", 0.2);
+                setTimeout(() => playTone(659.25, "sine", 0.2), 150);
+                setTimeout(() => playTone(783.99, "sine", 0.2), 300);
+                setTimeout(() => playTone(1046.50, "sine", 0.4), 450);
+            } else {
+                playTone(220, "sawtooth", 0.3);
+                setTimeout(() => playTone(196, "sawtooth", 0.3), 200);
+                setTimeout(() => playTone(146.83, "sawtooth", 0.5), 400);
+            }
+        }
+
+        // Bật tắt âm thanh hệ thống
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            if (soundEnabled) {
+                safeClassRemove("sound-icon-on", "hidden");
+                safeClassAdd("sound-icon-off", "hidden");
+            } else {
+                safeClassAdd("sound-icon-on", "hidden");
+                safeClassRemove("sound-icon-off", "hidden");
+            }
+        }
+
+        // Bắt đầu khởi tạo phiên chơi mới
+        function initiateGame() {
+            if (isPlaying) return;
+
+            // Khởi tạo các thông số trạng thái ban đầu
+            isPlaying = true;
+            score = 0;
+            timeLeft = 60;
+            lives = 5;
+            totalKeystrokes = 0;
+            correctKeystrokes = 0;
+            correctWordsCount = 0;
+            activeWords = [];
+            lastSpawnedWord = "";
+
+            // Giao diện chuyển đổi trạng thái hoạt động an toàn
+            const playZone = document.getElementById("play-zone");
+            if (playZone) {
+                playZone.innerHTML = ""; // Xóa các từ cũ còn sót lại
+                
+                // Thêm lại vạch cảnh báo vào vùng chơi
+                const warningLine = document.createElement("div");
+                warningLine.className = "absolute bottom-6 left-0 right-0 h-0.5 bg-red-500/50 border-t border-dashed border-red-500/80 pointer-events-none flex justify-center items-center";
+                warningLine.innerHTML = `<span class="bg-red-950 text-red-400 text-[10px] px-2 py-0.5 rounded border border-red-500/30 uppercase tracking-widest font-sans">Vạch Cảnh Báo</span>`;
+                playZone.appendChild(warningLine);
+            }
+
+            safeClassAdd("start-overlay", "hidden");
+            
+            const typingInput = document.getElementById("typing-input");
+            if (typingInput) {
+                typingInput.disabled = false;
+                typingInput.value = "";
+                typingInput.focus();
+            }
+
+            const btnAbort = document.getElementById("btn-abort");
+            if (btnAbort) btnAbort.disabled = false;
+
+            // Đồng bộ dữ liệu hiển thị lúc bắt đầu
+            updateUI();
+
+            // Kích hoạt đồng hồ đếm ngược 60 giây
+            gameInterval = setInterval(handleTick, 1000);
+
+            // Sinh từ đầu tiên ngay lập tức
+            spawnWord();
+
+            // Kích hoạt vòng lặp hoạt ảnh vật lý di chuyển từ
+            animationFrameId = requestAnimationFrame(animatePhysics);
+            
+            // Âm thanh báo hiệu bắt đầu vui nhộn
+            playTone(440, "sine", 0.15);
+        }
+
+        // Cập nhật giao diện điều khiển chỉ số
+        function updateUI() {
+            safeSetText("timer-display", `${timeLeft}s`);
+            safeSetText("score-display", score);
+            
+            // Tính toán tỷ lệ phần trăm chính xác
+            const accuracy = totalKeystrokes > 0 ? Math.round((correctKeystrokes / totalKeystrokes) * 100) : 100;
+            safeSetText("accuracy-display", `${accuracy}%`);
+
+            // Hiển thị biểu tượng tim cho lượt chơi sống
+            let heartSymbols = "";
+            for (let i = 0; i < 5; i++) {
+                heartSymbols += i < lives ? "❤" : "🖤";
+            }
+            safeSetText("lives-display", heartSymbols);
+        }
+
+        // Sinh từ mới rơi ngẫu nhiên - Đảm bảo chỉ có 1 từ xuất hiện và là từ mới
+        function spawnWord() {
+            if (!isPlaying) return;
+            
+            // Ràng buộc bảo vệ: Chỉ sinh từ mới nếu không có từ nào đang hoạt động
+            if (activeWords.length > 0) return;
+
+            // Chọn ngẫu nhiên từ mới đảm bảo không trùng với từ vừa gõ trước đó
+            let randomText = "";
+            do {
+                randomText = vocabPool[Math.floor(Math.random() * vocabPool.length)];
+            } while (randomText === lastSpawnedWord);
+            
+            lastSpawnedWord = randomText;
+
+            // Tạo phần tử DOM đại diện cho từ rơi
+            const wordEl = document.createElement("div");
+            wordEl.className = "absolute px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white font-bold whitespace-nowrap text-xl shadow-lg flex items-center transition-colors duration-150 tracking-wide";
+            
+            // Hiển thị từ ban đầu
+            wordEl.innerHTML = `<span class="text-blue-400"></span><span>${randomText}</span>`;
+
+            const playZone = document.getElementById("play-zone");
+            if (playZone) {
+                // Tính toán độ rộng xấp xỉ để tránh chữ bị đẩy sát ra biên ngoài tầm mắt
+                const approxWidth = randomText.length * 13 + 40;
+                const maxLeft = playZone.clientWidth - approxWidth - 20;
+                const randomLeft = Math.max(10, Math.floor(Math.random() * maxLeft));
+
+                wordEl.style.left = `${randomLeft}px`;
+                wordEl.style.top = "0px";
+
+                playZone.appendChild(wordEl);
+
+                // Lưu duy nhất 1 từ vào mảng quản lý
+                activeWords.push({
+                    element: wordEl,
+                    text: randomText,
+                    top: 0,
+                    // Tốc độ rơi tăng tiến nhẹ theo điểm số để thêm thử thách
+                    speed: 1.2 + (score * 0.01) + Math.random() * 0.6
+                });
+            }
+        }
+
+        // Tính toán hoạt ảnh rơi tự do của từ đang hoạt động
+        function animatePhysics() {
+            if (!isPlaying) return;
+
+            const playZone = document.getElementById("play-zone");
+            if (playZone) {
+                // Vạch giới hạn đỏ nguy hiểm
+                const dangerLimit = playZone.clientHeight - 24;
+
+                for (let i = activeWords.length - 1; i >= 0; i--) {
+                    const wordObj = activeWords[i];
+                    wordObj.top += wordObj.speed;
+                    wordObj.element.style.top = `${wordObj.top}px`;
+
+                    // Nếu để chữ chạm vạch giới hạn
+                    if (wordObj.top >= dangerLimit) {
+                        // Tạo hiệu ứng rung lắc vùng chơi cảnh báo
+                        playZone.classList.add("shake");
+                        setTimeout(() => {
+                            const pz = document.getElementById("play-zone");
+                            if (pz) pz.classList.remove("shake");
+                        }, 200);
+
+                        playErrorSound();
+
+                        // Trừ mạng người chơi
+                        lives--;
+                        updateUI();
+
+                        // Xóa phần tử khỏi giao diện một cách an toàn
+                        if (wordObj.element && wordObj.element.parentNode) {
+                            playZone.removeChild(wordObj.element);
+                        }
+                        activeWords.splice(i, 1);
+
+                        // Reset khung nhập chữ của người dùng để tránh kẹt ký tự cũ
+                        const typingInput = document.getElementById("typing-input");
+                        if (typingInput) typingInput.value = "";
+
+                        // Kiểm tra kết thúc cuộc chơi do hết mạng
+                        if (lives <= 0) {
+                            endGame(false);
+                            return;
+                        } else {
+                            // Tạo từ mới ngay sau khi từ cũ chạm vạch
+                            spawnTimeout = setTimeout(spawnWord, 200);
+                        }
+                    }
+                }
+            }
+
+            // Gán hoạt ảnh liên tục
+            animationFrameId = requestAnimationFrame(animatePhysics);
+        }
+
+        // Đếm ngược thời gian mỗi giây
+        function handleTick() {
+            timeLeft--;
+            updateUI();
+
+            if (timeLeft <= 0) {
+                endGame(true);
+            }
+        }
+
+        // Phân tích ký tự nhập vào ô văn bản
+        const typingInput = document.getElementById("typing-input");
+        if (typingInput) {
+            typingInput.addEventListener("input", function(e) {
+                if (!isPlaying) return;
+
+                const typedVal = typingInput.value.trim().toLowerCase();
+                totalKeystrokes++;
+
+                playClickSound();
+
+                let isMatchingPrefix = false;
+
+                // Do chỉ có tối đa 1 từ nên chúng ta kiểm tra phần tử duy nhất trong activeWords
+                if (activeWords.length > 0) {
+                    const wordObj = activeWords[0];
+                    const targetText = wordObj.text.toLowerCase();
+
+                    // TRƯỜNG HỢP 1: Gõ chuẩn xác hoàn toàn từ khóa đang rơi
+                    if (targetText === typedVal) {
+                        correctKeystrokes += typedVal.length;
+                        correctWordsCount++;
+                        score += 10; // Tăng điểm thưởng
+
+                        // Kích hoạt hiệu ứng nổ pháo hoa hạt ngọc bích lung linh
+                        createWordExplosion(wordObj.element);
+
+                        // Giải phóng DOM của từ vừa gõ xong
+                        if (wordObj.element && wordObj.element.parentNode) {
+                            const pz = document.getElementById("play-zone");
+                            if (pz) pz.removeChild(wordObj.element);
+                        }
+                        activeWords = []; // Dọn sạch mảng hoạt động
+
+                        playSuccessSound();
+                        
+                        // Làm trống ô nhập chữ chuẩn bị cho từ mới
+                        typingInput.value = "";
+                        isMatchingPrefix = true;
+                        updateUI();
+
+                        // Sinh từ mới tiếp theo sau khoảng chờ siêu ngắn 200ms để người chơi kịp chuyển mắt
+                        spawnTimeout = setTimeout(spawnWord, 200);
+                    }
+                    // TRƯỜNG HỢP 2: Đang gõ khớp phần đầu của từ
+                    else if (targetText.startsWith(typedVal) && typedVal !== "") {
+                        isMatchingPrefix = true;
+                        const matchedPart = wordObj.text.substring(0, typedVal.length);
+                        const remainingPart = wordObj.text.substring(typedVal.length);
+                        
+                        // Tô sáng chữ gõ đúng bằng màu xanh ngọc nổi bật
+                        wordObj.element.innerHTML = `<span class="text-emerald-400 font-extrabold bg-emerald-950/60 rounded px-1">${matchedPart}</span><span class="text-white">${remainingPart}</span>`;
+                        wordObj.element.classList.add("border-emerald-500", "bg-slate-900");
+                    } 
+                    // TRƯỜNG HỢP 3: Gõ không khớp
+                    else {
+                        // Trả về giao diện thường nếu gõ sai lệch
+                        wordObj.element.innerHTML = `<span class="text-blue-400"></span><span>${wordObj.text}</span>`;
+                        wordObj.element.classList.remove("border-emerald-500", "bg-slate-900");
+                    }
+                }
+
+                // Cập nhật chỉ số nếu người chơi gõ sai hướng hoàn toàn
+                if (!isMatchingPrefix && typedVal !== "") {
+                    updateUI();
+                }
+            });
+
+            // Người dùng có thể nhấn phím Enter để dọn trống ô nhập nhanh chóng
+            typingInput.addEventListener("keydown", function(e) {
+                if (e.key === "Enter") {
+                    typingInput.value = "";
+                    if (activeWords.length > 0) {
+                        const wordObj = activeWords[0];
+                        wordObj.element.innerHTML = `<span class="text-blue-400"></span><span>${wordObj.text}</span>`;
+                        wordObj.element.classList.remove("border-emerald-500", "bg-slate-900");
+                    }
+                }
+            });
+        }
+
+        // Tạo vụ nổ hạt tinh tế khi gõ thành công một từ
+        function createWordExplosion(element) {
+            const playZone = document.getElementById("play-zone");
+            if (!playZone || !element) return;
+
+            const rect = element.getBoundingClientRect();
+            const parentRect = playZone.getBoundingClientRect();
+            
+            const originX = rect.left - parentRect.left + rect.width / 2;
+            const originY = rect.top - parentRect.top + rect.height / 2;
+
+            for (let i = 0; i < 14; i++) {
+                const particle = document.createElement("div");
+                particle.className = "particle";
+                
+                // Sử dụng gam màu ngọc bích rực rỡ
+                const colors = ["#10b981", "#34d399", "#60a5fa", "#3b82f6", "#a7f3d0"];
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                particle.style.left = `${originX}px`;
+                particle.style.top = `${originY}px`;
+
+                // Vector phân tán các hạt theo mọi hướng
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 35 + Math.random() * 65;
+                const x = Math.cos(angle) * distance;
+                const y = Math.sin(angle) * distance;
+
+                particle.style.setProperty("--x", `${x}px`);
+                particle.style.setProperty("--y", `${y}px`);
+
+                playZone.appendChild(particle);
+
+                // Tự động dọn dẹp hạt sau khi kết thúc chuyển động
+                setTimeout(() => {
+                    if (particle.parentNode) {
+                        particle.parentNode.removeChild(particle);
+                    }
+                }, 600);
+            }
+        }
+
+        // Hủy lượt chơi giữa chừng
+        function abortGame() {
+            endGame(false, true);
+        }
+
+        // Kết thúc trò chơi
+        function endGame(timeUp, aborted = false) {
+            isPlaying = false;
+            
+            // Xóa toàn bộ bộ đếm thời gian hoạt động
+            clearInterval(gameInterval);
+            if (spawnTimeout) {
+                clearTimeout(spawnTimeout);
+                spawnTimeout = null;
+            }
+            
+            // Hủy hoạt ảnh rơi tự do vật lý tránh xung đột lượt chơi tiếp theo
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+
+            // Đồng bộ trạng thái giao diện điều khiển
+            const typingInput = document.getElementById("typing-input");
+            if (typingInput) {
+                typingInput.disabled = true;
+                typingInput.value = "";
+            }
+
+            const btnAbort = document.getElementById("btn-abort");
+            if (btnAbort) btnAbort.disabled = true;
+
+            safeClassRemove("start-overlay", "hidden");
+
+            if (aborted) {
+                // Nếu người dùng nhấn hủy lượt chơi, dọn dẹp màn hình và không hiện báo cáo
+                const playZone = document.getElementById("play-zone");
+                if (playZone) {
+                    playZone.innerHTML = "";
+                    const warningLine = document.createElement("div");
+                    warningLine.className = "absolute bottom-6 left-0 right-0 h-0.5 bg-red-500/50 border-t border-dashed border-red-500/80 pointer-events-none flex justify-center items-center";
+                    warningLine.innerHTML = `<span class="bg-red-950 text-red-400 text-[10px] px-2 py-0.5 rounded border border-red-500/30 uppercase tracking-widest font-sans">Vạch Cảnh Báo</span>`;
+                    playZone.appendChild(warningLine);
+                }
+                return;
+            }
+
+            // Phát âm thanh kết thúc
+            playFanfareSound(timeUp && score >= 50);
+
+            // Tính toán chỉ số báo cáo tổng kết
+            const accuracy = totalKeystrokes > 0 ? Math.round((correctKeystrokes / totalKeystrokes) * 100) : 0;
+            const elapsedMinutes = (60 - timeLeft) / 60;
+            const wpm = elapsedMinutes > 0 ? Math.round(correctWordsCount / elapsedMinutes) : 0;
+
+            // Truyền dữ liệu vào hộp thoại Modal
+            safeSetText("modal-status-text", timeUp 
+                ? "Chúc mừng bạn đã hoàn thành trọn vẹn thử thách gõ phím 1 phút!" 
+                : "Thời gian dừng lại sớm do số từ chưa gõ kịp chạm vạch giới hạn đỏ.");
+            safeSetText("modal-score", score);
+            safeSetText("modal-wpm", `${wpm} WPM`);
+            safeSetText("modal-accuracy", `${accuracy}%`);
+            safeSetText("modal-correct-count", `${correctWordsCount} từ`);
+
+            // Mở hộp thoại Modal báo cáo kết quả chi tiết
+            openModal();
+        }
+
+        // Các hàm quản lý đóng mở Modal kết quả
+        function openModal() {
+            safeClassRemove("result-modal", "hidden");
+            setTimeout(() => {
+                safeClassRemove("result-modal", "opacity-0");
+                const modalDiv = document.querySelector("#result-modal div");
+                if (modalDiv) modalDiv.classList.remove("scale-95");
+            }, 10);
+        }
+
+        function closeModal() {
+            safeClassAdd("result-modal", "opacity-0");
+            const modalDiv = document.querySelector("#result-modal div");
+            if (modalDiv) modalDiv.classList.add("scale-95");
+            setTimeout(() => {
+                safeClassAdd("result-modal", "hidden");
+            }, 300);
+        }
+    </script>
+</body>
+</html>
